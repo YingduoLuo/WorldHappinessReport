@@ -11,37 +11,131 @@ library(ggplot2)
 #data access
 ```{r}
 happiness <- read.csv("~/Downloads/happy2015/2015.csv")
-terrorism <- read.csv("~/Downloads/happy2015/globalterrorismdb_0616dist.csv")
+terrorism <- read.csv("~/Downloads/happy2015/globalterrorism.clean.data.csv")
 head(happiness)
-head(terrorism)
 ```
+Data Access
+A. In this rmd file, line 13 and line 14 are the import command for the happiness data and terrorism data.  
+B. Line 15 and line 16 are two head functions that display the first six cases in each of the data tables. Each case in happiness data is a country’s happiness and each case in terrorism is an event id.
+
 #data wrangling
 ## Part I:data clean
 ```{r}
 terrorismClean <-
   terrorism %>% 
-  filter(iyear=="2015") %>%
-  mutate(country = as.character(country_txt)) %>%
-  select(iyear, country)
+  filter(Year=="2015") %>%
+  select(Year, Country)
 
 happinessClean <-
   happiness %>%
-  mutate(country = as.character(Country)) %>%
-  select(country, Happiness.Score)
+  mutate(Country = as.character(Country)) %>%
+  select(Country, Happiness.Score)
 
 terrorismClean
 happinessClean
 
 table2015 <-
   happinessClean %>%
-  left_join(terrorismClean,by = "country") %>%
-  group_by(country) %>%
+  left_join(terrorismClean,by = "Country") %>%
+  group_by(Country) %>%
   summarise(Happiness.Score=max(Happiness.Score),attackTimes = n()) %>%
   arrange(desc(attackTimes))
   
 table2015
+relation<-
 ggplot(data=table2015, aes(x=Happiness.Score,y=attackTimes))+geom_line()
+relation
 
+```
+Data Wrangling Part I:
+A. Line 28, 29 and 30 used some data verbs to clean the terrorism table. Filter() brings out only those events that happen in 2015. Since our happiness report is for the year 2015, it is a good idea to use only terrorism events in 2015 when investigating potential connections. Mutate() create a new variable called country and change the original country_txt into character forms without changing its content. Finally, we use select() to only display the variable we need. Line 34 and line 35 are similar data verbs that we used to clean happiness data.
+B. Line 42 is where we used a left join operation to connect the two cleaned data tables by year. This left join keeps all variables in happinessClean and is followed by some more data verbs like group_by and arrange.
+E. Line 44 is where we used the reduction verb max() to find the highest happiness score of each country.
+
+Data Visualization Part I:
+A. Line 47 is where we used one of the geom, which is geom_line(), to plot the line graph
+B. Line 47 is where we used aesthetics to set the x-axis as happiness score and y-axis attack times to see if there is a relationship between these two variables.
+
+Analysis of the Graph:
+The graph shows the connection between happiness score and attack times. Attack times are calculated by sum up the number of attacks in each country. Based on the graph, we can see that for happiness score under 6, the attack times are relatively high, there is a peak between score 4 and 5, the attack times are over 2000. And for a score over six, we can see the attack times are much less. Thus we made a prediction that a higher happiness score would reduce the terrorism attack rate.
+
+```{r}
+library(plyr)
+happinessClean2 <- 
+  happiness %>%
+  rename(c("Happiness.Score"="Score","Economy..GDP.per.Capita."="Economy","Health..Life.Expectancy."="Health","Trust..Government.Corruption."="Trust","Dystopia.Residual"="Dystopia"))
+
+ggplotRegression <- function (fit) {
+  ggplot(fit$model, aes_string(x = names(fit$model)[1], y = names(fit$model)[2]),) + 
+    theme_bw() + geom_point(pch=20) + labs(title = names(fit$model)[2])
+}
+
+gg1 <-ggplotRegression(lm(Score ~ Dystopia, data = happinessClean2))
+gg2 <-ggplotRegression(lm(Score ~ Generosity, data = happinessClean2))
+gg3 <-ggplotRegression(lm(Score ~ Freedom, data = happinessClean2))
+gg4 <-ggplotRegression(lm(Score ~ Economy, data = happinessClean2))
+gg5 <-ggplotRegression(lm(Score ~ Family, data = happinessClean2))
+gg6 <-ggplotRegression(lm(Score ~ Health, data = happinessClean2))
+gg7 <-ggplotRegression(lm(Score ~ Trust, data = happinessClean2))
+
+library(grid)
+library(gridExtra)
+grid.arrange(gg1,gg2,gg3,gg4,gg5,gg6,gg7,ncol=3,nrow=3)
+```
+Part II: 
+
+Data Wrangling Part II:
+F) Line 82 is where we used a user-defined function to make a function that plots each variable to the happiness score.
+Data Visualization Part III:
+A) And  B) Line 84 is where we used second geom and another aesthetic. We used geom_point to represent each case and pch=20 sets the case in the shape of a small circle so we can see the result in a nice and neat format.
+
+Analysis of the Graph:
+Based on the graph, we can assume the economy and family are possibly the strongest factors that relate to happiness. Although we don’t have the exact number to support yet, the dots seem to line up in a positive direction.
+
+```{r}
+library(corrplot)
+```
+
+
+```{r}
+corMat=cor(happinessClean2[,c(4,6,7,8,9,10,11,12)])
+corrplot(corMat, method = "number")
+```
+Another way of Part II:
+
+Analysis of the Graph:
+The graph above is a correlation graph and it represents how strong each factor is related to and happiness score. In the colored correlation graph, it uses numbers to show that the relationship between happiness score and economy are the strongest. 0.78 also represents that their relationship is positive, which means the better the economy, the happiness score is higher. Based on this graph, our prediction that the economy is the strongest factor related to happiness score is again stated.
+
+```{r}
+tree <-
+  party::ctree(Score ~ Economy, data = happinessClean2)
+plot(tree, type="simple")
+```
+Data Wrangling Part III:
+H) Line 88 is where we used machine learning to investigate happiness scores using the factor economy. 
+Data Visualization Part III:
+E) Line 89 plotted a decision tree using the most related factor economy. By using the economy factor alone, the happiness score is able to divide into 4 groups.
+
+Analysis of the Graph:
+Based on the decision tree above, we can see that economic is a good indicator in deciding a country’s happiness. For the economy higher than 1.2, the country are the happiest with a score of 6.8. For country has an economy higher than 0.9 but less than 1.2, the country is less happy but still with a relatively high score of 5.7. For the economy lower than 0.9 but higher than 0.47, the happiness score decrease to 5.0 and lastly for economy less and equal to 0.47, the happiness score is the lowest. 
+
+```{r}
+happinessClean3 <-
+  happiness %>%
+  mutate(Country = as.character(Country)) %>%
+  select(Country, Happiness.Score,Economy..GDP.per.Capita.)
+
+EconomyTerror <-
+  happinessClean3 %>%
+  left_join(terrorismClean,by = "Country") %>%
+  group_by(Country) %>%
+  summarise(Happiness.Score=max(Happiness.Score),Economy..GDP.per.Capita.=max(Economy..GDP.per.Capita.),attackTimes = n()) %>%
+  arrange(desc(attackTimes)) %>%
+  mutate(AboveAverage=if_else( Economy..GDP.per.Capita. > mean(Economy..GDP.per.Capita.),"True","False"))
+EconomyTerror
+
+EconomyTerror %>%
+  ggplot(aes(y=attackTimes,x=Happiness.Score,color=AboveAverage,size=attackTimes))+geom_point(alpha=0.5)+ylim(0,400)
 ```
 
 
