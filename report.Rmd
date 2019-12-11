@@ -6,13 +6,14 @@ output: html_notebook
 ```{r}
 library(dplyr)
 library(ggplot2)
+library(plyr)
+library(conflicted)
 ```
 
 #data access
 ```{r}
 happiness <- read.csv("~/Downloads/happy2015/2015.csv")
 terrorism <- read.csv("~/Downloads/happy2015/globalterrorism.clean.data.csv")
-head(happiness)
 ```
 Data Access
 A. In this rmd file, line 13 and line 14 are the import command for the happiness data and terrorism data.  
@@ -23,27 +24,29 @@ B. Line 15 and line 16 are two head functions that display the first six cases i
 ```{r}
 terrorismClean <-
   terrorism %>% 
-  filter(Year=="2015") %>%
-  select(Year, Country)
+  dplyr::filter(Year =="2015") %>%
+  dplyr::mutate(Country = as.character(Country)) %>%
+  dplyr::select(Year, Country)
 
 happinessClean <-
   happiness %>%
-  mutate(Country = as.character(Country)) %>%
-  select(Country, Happiness.Score)
+  dplyr::mutate(Country = as.character(Country)) %>%
+  plyr::rename(c("Happiness.Score"="Score","Economy..GDP.per.Capita."="Economy","Health..Life.Expectancy."="Health","Trust..Government.Corruption."="Trust","Dystopia.Residual"="Dystopia"))
 
 terrorismClean
 happinessClean
 
 table2015 <-
-  happinessClean %>%
-  left_join(terrorismClean,by = "Country") %>%
-  group_by(Country) %>%
-  summarise(Happiness.Score=max(Happiness.Score),attackTimes = n()) %>%
-  arrange(desc(attackTimes))
+  terrorismClean %>%
+  dplyr::left_join(happinessClean,by = "Country") %>%
+  dplyr::group_by(Country) %>%
+  dplyr::summarise(Score=max(Score),Economy=max(Economy),attackTimes = n()) %>%
+  dplyr::arrange(desc(attackTimes))
+
+table2015clean <- na.omit(table2015)
   
-table2015
 relation<-
-ggplot(data=table2015, aes(x=Happiness.Score,y=attackTimes))+geom_line()
+ggplot(data=table2015clean, aes(x=Score,y=attackTimes))+geom_line()
 relation
 
 ```
@@ -60,23 +63,19 @@ Analysis of the Graph:
 The graph shows the connection between happiness score and attack times. Attack times are calculated by sum up the number of attacks in each country. Based on the graph, we can see that for happiness score under 6, the attack times are relatively high, there is a peak between score 4 and 5, the attack times are over 2000. And for a score over six, we can see the attack times are much less. Thus we made a prediction that a higher happiness score would reduce the terrorism attack rate.
 
 ```{r}
-library(plyr)
-happinessClean2 <- 
-  happiness %>%
-  rename(c("Happiness.Score"="Score","Economy..GDP.per.Capita."="Economy","Health..Life.Expectancy."="Health","Trust..Government.Corruption."="Trust","Dystopia.Residual"="Dystopia"))
 
 ggplotRegression <- function (fit) {
   ggplot(fit$model, aes_string(x = names(fit$model)[1], y = names(fit$model)[2]),) + 
     theme_bw() + geom_point(pch=20) + labs(title = names(fit$model)[2])
 }
 
-gg1 <-ggplotRegression(lm(Score ~ Dystopia, data = happinessClean2))
-gg2 <-ggplotRegression(lm(Score ~ Generosity, data = happinessClean2))
-gg3 <-ggplotRegression(lm(Score ~ Freedom, data = happinessClean2))
-gg4 <-ggplotRegression(lm(Score ~ Economy, data = happinessClean2))
-gg5 <-ggplotRegression(lm(Score ~ Family, data = happinessClean2))
-gg6 <-ggplotRegression(lm(Score ~ Health, data = happinessClean2))
-gg7 <-ggplotRegression(lm(Score ~ Trust, data = happinessClean2))
+gg1 <-ggplotRegression(lm(Score ~ Dystopia, data = happinessClean))
+gg2 <-ggplotRegression(lm(Score ~ Generosity, data = happinessClean))
+gg3 <-ggplotRegression(lm(Score ~ Freedom, data = happinessClean))
+gg4 <-ggplotRegression(lm(Score ~ Economy, data = happinessClean))
+gg5 <-ggplotRegression(lm(Score ~ Family, data = happinessClean))
+gg6 <-ggplotRegression(lm(Score ~ Health, data = happinessClean))
+gg7 <-ggplotRegression(lm(Score ~ Trust, data = happinessClean))
 
 library(grid)
 library(gridExtra)
@@ -98,7 +97,7 @@ library(corrplot)
 
 
 ```{r}
-corMat=cor(happinessClean2[,c(4,6,7,8,9,10,11,12)])
+corMat=cor(happinessClean[,c(4,6,7,8,9,10,11,12)])
 corrplot(corMat, method = "number")
 ```
 Another way of Part II:
@@ -108,7 +107,7 @@ The graph above is a correlation graph and it represents how strong each factor 
 
 ```{r}
 tree <-
-  party::ctree(Score ~ Economy, data = happinessClean2)
+  party::ctree(Score ~ Economy, data = happinessClean)
 plot(tree, type="simple")
 ```
 Data Wrangling Part III:
@@ -119,23 +118,22 @@ E) Line 89 plotted a decision tree using the most related factor economy. By usi
 Analysis of the Graph:
 Based on the decision tree above, we can see that economic is a good indicator in deciding a country’s happiness. For the economy higher than 1.2, the country are the happiest with a score of 6.8. For country has an economy higher than 0.9 but less than 1.2, the country is less happy but still with a relatively high score of 5.7. For the economy lower than 0.9 but higher than 0.47, the happiness score decrease to 5.0 and lastly for economy less and equal to 0.47, the happiness score is the lowest. 
 
+
 ```{r}
-happinessClean3 <-
-  happiness %>%
-  mutate(Country = as.character(Country)) %>%
-  select(Country, Happiness.Score,Economy..GDP.per.Capita.)
 
 EconomyTerror <-
-  happinessClean3 %>%
-  left_join(terrorismClean,by = "Country") %>%
-  group_by(Country) %>%
-  summarise(Happiness.Score=max(Happiness.Score),Economy..GDP.per.Capita.=max(Economy..GDP.per.Capita.),attackTimes = n()) %>%
-  arrange(desc(attackTimes)) %>%
-  mutate(AboveAverage=if_else( Economy..GDP.per.Capita. > mean(Economy..GDP.per.Capita.),"True","False"))
+  table2015clean %>%
+  dplyr::mutate(AboveAverage=if_else(Economy > mean(Economy),"True","False"))
 EconomyTerror
 
 EconomyTerror %>%
-  ggplot(aes(y=attackTimes,x=Happiness.Score,color=AboveAverage,size=attackTimes))+geom_point(alpha=0.5)+ylim(0,400)
+  ggplot(aes(y=attackTimes,x=Score,color=AboveAverage,size=attackTimes))+geom_point(alpha=0.5)+ylim(0,400)
 ```
+Analysis graph:
+The graph shows three variables, the country’s happiness score, attack times and whether the economy is above or below the average. The large red circles indicate that countries with an economy below the average and the happiness score less than 5 have a great number of attacks in a year compared to much fewer attacks for economy above average and happiness score higher than 6 showed in the blue little circle. Thus, we think the change in the economy will not only have an impact on happiness scores but also on attack times.
+
+
+
+
 
 
